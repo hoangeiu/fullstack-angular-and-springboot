@@ -93,12 +93,13 @@ h6 {
 
 a {
   display: inline-block;
+  text-decoration: none !important;
 }
 
 a:active,
 a:focus,
 a:hover {
-  text-decoration: none;
+  text-decoration: none !important;
   outline: 0;
 }
 
@@ -740,6 +741,10 @@ table.table.table-bordered th {
 }
 .detail-section {
   margin-top: 60px;
+}
+
+.detail-img {
+  width: 30%;
 }
 /**/
 

@@ -14,13 +14,19 @@ export class ProductService {
 
   constructor(private httpClient: HttpClient) {}
 
+  getProduct(id: number): Observable<Product> {
+    const productUrl = `${this.baseUrl}/${id}`;
+
+    return this.httpClient.get<Product>(productUrl);
+  }
+
   getProductList(theCategoryId: number): Observable<Product[]> {
     const searchUrl = `${this.baseUrl}/search/findByCategoryId?id=${theCategoryId}`;
 
     return this.getProducts(searchUrl);
   }
 
-  searchProducts(keyword: string) {
+  searchProducts(keyword: string): Observable<Product[]> {
     const searchUrl = `${this.baseUrl}/search/findByNameContaining?name=${keyword}`;
 
     return this.getProducts(searchUrl);
