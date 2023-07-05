@@ -230,9 +230,7 @@
           <label class="au-checkbox">
             <input
               type="checkbox"
-              (change)="
-                copyShippingAddressToBillingAddress($any($event).target.value)
-              "
+              (change)="copyShippingAddressToBillingAddress($event)"
             />
             <span class="au-checkmark"></span>Billing Address same as Shipping
             Address
