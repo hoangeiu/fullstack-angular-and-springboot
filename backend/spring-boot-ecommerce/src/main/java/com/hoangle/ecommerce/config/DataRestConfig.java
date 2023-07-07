@@ -1,9 +1,6 @@
 package com.hoangle.ecommerce.config;
 
-import com.hoangle.ecommerce.entity.Country;
-import com.hoangle.ecommerce.entity.Product;
-import com.hoangle.ecommerce.entity.ProductCategory;
-import com.hoangle.ecommerce.entity.State;
+import com.hoangle.ecommerce.entity.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.metamodel.EntityType;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +39,8 @@ public class DataRestConfig implements RepositoryRestConfigurer {
         disableHttpMethods(Country.class, config, theUnsupportedActions);
 
         disableHttpMethods(State.class, config, theUnsupportedActions);
+
+        disableHttpMethods(Order.class, config, theUnsupportedActions);
 
         // call an internal helper method
         exposeIds(config);

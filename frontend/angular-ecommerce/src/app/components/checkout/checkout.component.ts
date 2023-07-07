@@ -33,6 +33,7 @@ export class CheckoutComponent implements OnInit {
   countries: Country[] = [];
   shippingAddressStates: State[] = [];
   billingAddressStates: State[] = [];
+  storage: Storage = localStorage;
 
   constructor(
     private formBuilder: FormBuilder,
@@ -143,6 +144,12 @@ export class CheckoutComponent implements OnInit {
     this.cartService.totalQuantity.subscribe(
       (data) => (this.totalQuantity = data)
     );
+
+    const userEmail = this.storage.getItem('userEmail');
+    if (userEmail) {
+      const theEmail = JSON.parse(userEmail);
+      this.checkoutFormGroup.get('customer')?.get('email')?.setValue(theEmail);
+    }
   }
 
   onSubmit() {
@@ -215,6 +222,7 @@ export class CheckoutComponent implements OnInit {
     this.cartService.setCartItems([]);
     this.cartService.totalPrice.next(0);
     this.cartService.totalQuantity.next(0);
+    this.cartService.computeCartTotals();
 
     // reset the form
     this.checkoutFormGroup.reset();
