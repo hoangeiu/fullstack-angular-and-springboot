@@ -9,6 +9,7 @@ import { Router } from '@angular/router';
 import { Country } from 'src/app/common/country';
 import { Order } from 'src/app/common/order';
 import { OrderItem } from 'src/app/common/order-item';
+import { PaymentInfo } from 'src/app/common/payment-info';
 import { Purchase } from 'src/app/common/purchase';
 // import { Order } from 'src/app/common/order';
 // import { OrderItem } from 'src/app/common/order-item';
@@ -18,6 +19,7 @@ import { CartService } from 'src/app/services/cart.service';
 import { CheckoutService } from 'src/app/services/checkout.service';
 import { ShopFormService } from 'src/app/services/shop-form.service';
 import { CommonValidators } from 'src/app/validators/common-validators';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-checkout',
@@ -25,6 +27,8 @@ import { CommonValidators } from 'src/app/validators/common-validators';
   styleUrls: ['./checkout.component.css'],
 })
 export class CheckoutComponent implements OnInit {
+  isDisabled: boolean = false;
+
   checkoutFormGroup!: FormGroup;
   totalPrice: number = 0;
   totalQuantity: number = 0;
@@ -33,7 +37,15 @@ export class CheckoutComponent implements OnInit {
   countries: Country[] = [];
   shippingAddressStates: State[] = [];
   billingAddressStates: State[] = [];
+
   storage: Storage = localStorage;
+
+  // initialize Stripe API
+  stripe = Stripe(environment.stripePublishableKey);
+
+  paymentInfo: PaymentInfo = new PaymentInfo();
+  cardElement: any;
+  displayError: any = '';
 
   constructor(
     private formBuilder: FormBuilder,
@@ -100,40 +112,42 @@ export class CheckoutComponent implements OnInit {
         ]),
       }),
       creditCard: this.formBuilder.group({
-        cardType: new FormControl('', [Validators.required]),
-        nameOnCard: new FormControl('', [
-          Validators.required,
-          Validators.minLength(2),
-          CommonValidators.notOnlyWhitespace,
-        ]),
-        cardNumber: new FormControl('4242424242424242', [
-          Validators.required,
-          Validators.pattern('[0-9]{16}'),
-        ]),
-        securityCode: new FormControl('567', [
-          Validators.required,
-          Validators.pattern('[0-9]{3}'),
-        ]),
-        expirationMonth: new FormControl('', [Validators.required]),
-        expirationYear: new FormControl('', [Validators.required]),
+        // cardType: new FormControl('', [Validators.required]),
+        // nameOnCard: new FormControl('', [
+        //   Validators.required,
+        //   Validators.minLength(2),
+        //   CommonValidators.notOnlyWhitespace,
+        // ]),
+        // cardNumber: new FormControl('4242424242424242', [
+        //   Validators.required,
+        //   Validators.pattern('[0-9]{16}'),
+        // ]),
+        // securityCode: new FormControl('567', [
+        //   Validators.required,
+        //   Validators.pattern('[0-9]{3}'),
+        // ]),
+        // expirationMonth: new FormControl('', [Validators.required]),
+        // expirationYear: new FormControl('', [Validators.required]),
       }),
     });
 
-    const startMonth: number = new Date().getMonth() + 1;
-    this.shopFormService.getCreditCardMonths(startMonth).subscribe((data) => {
-      this.creditCardMonths = data;
-      this.checkoutFormGroup
-        .get('creditCard')
-        ?.get('expirationMonth')
-        ?.setValue(data[0]);
-    });
-    this.shopFormService.getCreditCardYears().subscribe((data) => {
-      this.creditCardYears = data;
-      this.checkoutFormGroup
-        .get('creditCard')
-        ?.get('expirationYear')
-        ?.setValue(data[1]);
-    });
+    this.setupStripePaymentForm();
+
+    // const startMonth: number = new Date().getMonth() + 1;
+    // this.shopFormService.getCreditCardMonths(startMonth).subscribe((data) => {
+    //   this.creditCardMonths = data;
+    //   this.checkoutFormGroup
+    //     .get('creditCard')
+    //     ?.get('expirationMonth')
+    //     ?.setValue(data[0]);
+    // });
+    // this.shopFormService.getCreditCardYears().subscribe((data) => {
+    //   this.creditCardYears = data;
+    //   this.checkoutFormGroup
+    //     .get('creditCard')
+    //     ?.get('expirationYear')
+    //     ?.setValue(data[1]);
+    // });
 
     this.shopFormService
       .getCountries()
@@ -152,6 +166,29 @@ export class CheckoutComponent implements OnInit {
     }
   }
 
+  setupStripePaymentForm() {
+    // get a handle to stripe elements
+    let elements = this.stripe.elements();
+
+    // Create a card element ... and hide the zip code field
+    this.cardElement = elements.create('card', { hidePostalCode: true });
+
+    // Add an instance of card UI component into the 'card-element' div
+    this.cardElement.mount('#card-element');
+
+    // Add event binding for the 'change' event on the card element
+    this.cardElement.on('change', (event: any) => {
+      // get a handle to card-errors element
+      this.displayError = document.getElementById('card-errors');
+
+      if (event.complete) {
+        this.displayError.textContent = '';
+      } else if (event.error) {
+        this.displayError.textContent = event.error.message;
+      }
+    });
+  }
+
   onSubmit() {
     console.log('Submit');
 
@@ -159,6 +196,8 @@ export class CheckoutComponent implements OnInit {
       this.checkoutFormGroup.markAllAsTouched();
       return;
     }
+
+    this.isDisabled = true;
 
     // set up order
     let order = new Order();
@@ -205,16 +244,66 @@ export class CheckoutComponent implements OnInit {
     purchase.order = order;
     purchase.orderItems = orderItems;
 
+    // compute payment info
+    this.paymentInfo.amount = Math.round(this.totalPrice * 100);
+    this.paymentInfo.currency = 'USD';
+
+    if (this.displayError.textContent === '') {
+      this.checkoutService
+        .createPaymentIntent(this.paymentInfo)
+        .subscribe((paymentIntentResponse) => {
+          this.stripe
+            .confirmCardPayment(
+              paymentIntentResponse.client_secret,
+              {
+                payment_method: {
+                  card: this.cardElement,
+                  billing_details: {
+                    email: purchase.customer.email,
+                    name: `${purchase.customer.firstName} ${purchase.customer.lastName}`,
+                    address: {
+                      line1: purchase.billingAddress.street,
+                      city: purchase.billingAddress.city,
+                      state: purchase.billingAddress.state,
+                      postal_code: purchase.billingAddress.zipCode,
+                      country: this.billingAddressCity?.value.code,
+                    },
+                  },
+                },
+              },
+              { handleActions: false }
+            )
+            .then((result: any) => {
+              if (result.error) {
+                console.log(`There was an error: ${result.error.message}`);
+                this.isDisabled = false;
+              } else {
+                this.checkoutService.placeOrder(purchase).subscribe({
+                  next: (response) => {
+                    console.log(response);
+                    this.resetCart();
+                    this.isDisabled = true;
+                  },
+                  error: (error) => {
+                    console.log(error);
+                    this.isDisabled = false;
+                  },
+                });
+              }
+            });
+        });
+    }
+
     // call REST API
-    this.checkoutService.placeOrder(purchase).subscribe({
-      next: (response) => {
-        console.log(response);
-        this.resetCart();
-      },
-      error: (error) => {
-        console.log(error);
-      },
-    });
+    // this.checkoutService.placeOrder(purchase).subscribe({
+    //   next: (response) => {
+    //     console.log(response);
+    //     this.resetCart();
+    //   },
+    //   error: (error) => {
+    //     console.log(error);
+    //   },
+    // });
   }
 
   resetCart() {
